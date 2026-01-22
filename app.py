@@ -164,7 +164,7 @@ def display_product_grid(df, columns=4):
                 
                 # Display image
                 try:
-                    st.image(image_url, use_container_width=True)
+                    st.image(image_url)
                 except:
                     st.image("https://via.placeholder.com/300x300?text=No+Image", use_container_width=True)
                 
