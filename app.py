@@ -7,246 +7,188 @@ from rating_based_recommendation import get_top_rated_items
 from content_based_filtering import content_based_recommendation
 from collaborative_based_filtering import collaborative_filtering_recommendations
 
-# ---------------- PAGE CONFIG ----------------
+
+# ===================== PAGE CONFIG =====================
 st.set_page_config(
-    page_title="MyCart - Product Recommendations",
+    page_title="MyCart",
     page_icon="🛒",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# ---------------- CUSTOM CSS ----------------
+# ===================== GLOBAL CSS =====================
 st.markdown("""
-    <style>
-    .main-logo {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #10b981;
-        font-family: 'Monaco', monospace;
-        margin-bottom: 1rem;
-    }
-    .product-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 1rem;
-        background: white;
-        transition: transform 0.2s;
-        height: 100%;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 2rem 0 1rem 0;
-        
-    }
-    .search-history-item {
-        padding: 0.5rem;
-        margin: 0.25rem 0;
-        background: #f3f4f6;
-        border-radius: 6px;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
-    .search-history-item:hover {
-        background: #e5e7eb;
-    }
-    div[data-testid="stImage"] {
-        display: flex;
-        justify-content: center;
-    }
-    </style>
+<style>
+.product-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    height: 460px;
+    background: black;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.product-img {
+    height: 180px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.product-img img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.card-footer {
+    margin-top: auto;
+}
+
+.sidebar-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #10b981;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# ---------------- INITIALIZE SESSION STATE ----------------
-if 'search_history' not in st.session_state:
+# ===================== SESSION STATE =====================
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+
+if "user_id" not in st.session_state:
+    st.session_state.user_id = 0
+
+if "search_history" not in st.session_state:
     st.session_state.search_history = []
 
-if 'data' not in st.session_state:
-    with st.spinner('Loading product data...'):
-        raw_data = pd.read_csv("clean_data.csv")
-        st.session_state.data = process_data(raw_data)
+if "data" not in st.session_state:
+    with st.spinner("Loading product data..."):
+        raw = pd.read_csv("clean_data.csv")
+        st.session_state.data = process_data(raw)
 
 data = st.session_state.data
 
-# ---------------- SIDEBAR ----------------
-with st.sidebar:
-    st.markdown('<div class="main-logo">&lt;MyCart/&gt;</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    user_id = st.text_input(
-        "👤 User ID",
-        value="0",
-        help="Enter your User ID or 0 for Guest/New User",
-        placeholder="0"
-    )
-    
-    try:
-        user_id = int(user_id)
-    except ValueError:
-        user_id = 0
-        st.warning("Invalid User ID. Using Guest mode (0)")
-    
-    # Display search history
-    if st.session_state.search_history:
-        st.markdown("---")
-        st.markdown("### 🕐 Recent Searches")
-        
-        for i, search_item in enumerate(reversed(st.session_state.search_history[-10:])):
-            if st.button(
-                f"🔍 {search_item['query'][:25]}{'...' if len(search_item['query']) > 25 else ''}",
-                key=f"history_{i}",
-                help=f"Searched on {search_item['timestamp']}"
-            ):
-                st.session_state.selected_search = search_item['query']
-                st.rerun()
 
-# ---------------- HELPER FUNCTIONS ----------------
+# ===================== HELPERS =====================
 def add_to_search_history(query):
-    """Add search query to history with timestamp"""
-    if query and query.strip():
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        # Avoid duplicates
-        if not any(item['query'].lower() == query.lower() for item in st.session_state.search_history):
+    if query.strip():
+        if not any(q["query"].lower() == query.lower() for q in st.session_state.search_history):
             st.session_state.search_history.append({
-                'query': query.strip(),
-                'timestamp': timestamp
+                "query": query,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M")
             })
 
-def get_rating_based_recommendations(top_n=16):
-    """Get top rated products"""
-    try:
-        result = get_top_rated_items(data, top_n=top_n)
-        return pd.DataFrame(result) if not isinstance(result, pd.DataFrame) else result
-    except Exception as e:
-        st.error(f"Error fetching top rated products: {str(e)}")
-        return pd.DataFrame()
 
-def get_content_based_recommendations(item_name, top_n=16):
-    """Get content based recommendations"""
-    try:
-        result = content_based_recommendation(data, item_name, top_n=top_n)
-        return pd.DataFrame(result) if not isinstance(result, pd.DataFrame) else result
-    except Exception as e:
-        st.error(f"Error fetching content recommendations: {str(e)}")
-        return pd.DataFrame()
-
-def get_collaborative_recommendations(user_id, top_n=16):
-    """Get collaborative filtering recommendations"""
-    try:
-        result = collaborative_filtering_recommendations(data, user_id, top_n=top_n)
-        return pd.DataFrame(result) if not isinstance(result, pd.DataFrame) else result
-    except Exception as e:
-        st.error(f"Error fetching collaborative recommendations: {str(e)}")
-        return pd.DataFrame()
-
-def display_product_grid(df, columns=4):
-    """Display products in a responsive grid layout"""
+def display_product_grid(df):
     if df.empty:
-        st.info("🔍 No products found matching your criteria")
+        st.info("No products found")
         return
-    
-    # Ensure required columns exist
-    required_cols = ['Name', 'Brand', 'Rating', 'ImageURL']
-    if not all(col in df.columns for col in required_cols):
-        st.error("Product data is missing required fields")
-        return
-    
-    rows = [df.iloc[i:i+columns] for i in range(0, len(df), columns)]
-    
-    for row_data in rows:
-        cols = st.columns(columns)
-        
-        for idx, (col, (_, product)) in enumerate(zip(cols, row_data.iterrows())):
+
+    for i in range(0, len(df), 4):
+        cols = st.columns(4)
+
+        for col, (_, p) in zip(cols, df.iloc[i:i+4].iterrows()):
             with col:
-                # Get first image from pipe-separated URLs
-                image_url = str(product['ImageURL']).split('|')[0].strip()
-                
-                # Display image
-                try:
-                    st.image(image_url)
-                except:
-                    st.image("https://via.placeholder.com/300x300?text=No+Image", use_container_width=True)
-                
-                # Product details
-                st.markdown(f"**{product['Name'][:60]}{'...' if len(str(product['Name'])) > 60 else ''}**")
-                st.caption(f"🏷️ {product['Brand']}")
-                
-                # Rating display
-                rating = float(product['Rating'])
-                stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
-                st.markdown(f"{stars} **{rating:.1f}**/5")
-                
-                st.markdown("---")
+                image = str(p["ImageURL"]).split("|")[0]
 
-# ---------------- MAIN CONTENT ----------------
-st.title("🛒 MyCart Product Recommendations")
-st.markdown("Discover products tailored to your preferences")
+                st.markdown(f"""
+                <div class="product-card">
+                    <div class="product-img">
+                        <img src="{image}" />
+                    </div>
+                    <div>
+                        <strong>{p["Name"][:60]}</strong><br/>
+                        <small>{p["Brand"]}</small><br/>
+                        ⭐ {p["Rating"]}/5
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-# Search section
-st.markdown("### 🔍 Search for Products")
+                st.button("🛒 Add to Cart", key=f"cart_{p['Name']}")
 
-col1, col2 = st.columns([4, 1])
 
-with col1:
-    # Check if there's a selected search from history
-    default_value = st.session_state.get('selected_search', '')
-    product_name = st.text_input(
-        "Product Name",
-        value=default_value,
-        placeholder="e.g., OPI Nail Polish, Samsung Galaxy, Nike Shoes...",
-        label_visibility="collapsed"
-    )
-    # Clear the selected search after using it
-    if 'selected_search' in st.session_state:
-        del st.session_state.selected_search
+# ===================== SIDEBAR =====================
+def sidebar():
+    with st.sidebar:
+        st.markdown("<div class='sidebar-title'>&lt;MyCart/&gt;</div>", unsafe_allow_html=True)
+        st.markdown(f"👤 **User ID:** `{st.session_state.user_id}`")
+        st.markdown("---")
 
-with col2:
-    submit = st.button("🔍 Search", type="primary", use_container_width=True)
+        if st.session_state.search_history:
+            st.markdown("### 🕐 Search History")
+            for item in reversed(st.session_state.search_history[-8:]):
+                if st.button(item["query"], use_container_width=True):
+                    st.session_state.selected_search = item["query"]
+                    st.rerun()
 
-st.markdown("---")
+        st.markdown("---")
+        if st.button("🚪 Logout"):
+            st.session_state.page = "login"
+            st.session_state.user_id = 0
+            st.session_state.search_history = []
+            st.rerun()
 
-# ---------------- DISPLAY RECOMMENDATIONS ----------------
 
-# Always show highly rated products
-st.markdown('<div class="section-header">⭐ Highly Rated Products</div>', unsafe_allow_html=True)
-st.markdown("*Top picks based on customer ratings*")
-st.markdown("")
+# ===================== LOGIN PAGE =====================
+def login_page():
+    st.markdown("<h1 style='text-align:center;'>🛒 MyCart Login</h1>", unsafe_allow_html=True)
+    st.markdown("---")
 
-with st.spinner('Loading top rated products...'):
-    rating_based_df = get_rating_based_recommendations(top_n=8)
-    display_product_grid(rating_based_df, columns=4)
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        user_id = st.text_input("User ID", value="0")
+        password = st.text_input("Password", type="password")
 
-# Show search-based recommendations if submitted
-if submit and product_name.strip():
-    add_to_search_history(product_name)
-    
-    # Content Based Recommendations
-    st.markdown('<div class="section-header">🎯 Similar Products</div>', unsafe_allow_html=True)
-    st.markdown(f"*Products similar to '{product_name}'*")
-    st.markdown("")
-    
-    with st.spinner('Finding similar products...'):
-        content_based_df = get_content_based_recommendations(product_name, top_n=8)
-        display_product_grid(content_based_df, columns=4)
-    
-    # Collaborative Recommendations (only for logged-in users)
-    if user_id != 0:
-        st.markdown('<div class="section-header">👥 Recommended for You</div>', unsafe_allow_html=True)
-        st.markdown(f"*Based on users with similar preferences (User ID: {user_id})*")
-        st.markdown("")
-        
-        with st.spinner('Personalizing recommendations...'):
-            collab_based_df = get_collaborative_recommendations(user_id, top_n=8)
-            display_product_grid(collab_based_df, columns=4)
-    else:
-        st.info("💡 **Tip:** Enter your User ID to get personalized recommendations!")
+        if st.button("Login", type="primary", use_container_width=True):
+            try:
+                st.session_state.user_id = int(user_id)
+                st.session_state.page = "home"
+                st.rerun()
+            except:
+                st.error("User ID must be a number")
 
-# Footer
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #6b7280; padding: 2rem;'>"
-    "Built with ❤️ using Streamlit | Powered by Machine Learning"
-    "</div>",
-    unsafe_allow_html=True
-)
+
+# ===================== HOME PAGE =====================
+def home_page():
+    sidebar()
+
+    st.title("🛒 Product Recommendations")
+
+    col1, col2 = st.columns([4,1])
+    with col1:
+        default = st.session_state.get("selected_search", "")
+        query = st.text_input("Search product", value=default)
+        st.session_state.pop("selected_search", None)
+
+    with col2:
+        search = st.button("Search", type="primary", use_container_width=True)
+
+    st.markdown("---")
+
+    st.subheader("⭐ Highly Rated Products")
+    top_df = get_top_rated_items(data, top_n=12)
+    display_product_grid(top_df)
+
+    if search and query.strip():
+        add_to_search_history(query)
+
+        st.subheader("🎯 Similar Products")
+        sim_df = content_based_recommendation(data, query, top_n=12)
+        display_product_grid(sim_df)
+
+        if st.session_state.user_id != 0:
+            st.subheader("👥 Recommended for You")
+            collab_df = collaborative_filtering_recommendations(
+                data, st.session_state.user_id, top_n=12
+            )
+            display_product_grid(collab_df)
+
+
+# ===================== ROUTER =====================
+if st.session_state.page == "login":
+    login_page()
+else:
+    home_page()
